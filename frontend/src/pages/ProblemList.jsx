@@ -32,11 +32,11 @@ function ProblemList() {
   }, []);
 
   return (
-    <div className="p-6">
+    <div className="p-6 bg-white text-black dark:bg-zinc-900 dark:text-white min-h-screen">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">📝 All Problems</h1>
         <select
-          className="border px-3 py-1 rounded"
+          className="border px-3 py-1 rounded dark:bg-zinc-800 dark:text-white dark:border-gray-700"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         >
@@ -48,7 +48,7 @@ function ProblemList() {
       </div>
 
       <table className="table-auto w-full border text-left text-sm">
-        <thead className="bg-gray-100">
+        <thead className="bg-gray-100 dark:bg-zinc-800 border-b dark:border-gray-700">
           <tr>
             <th className="px-4 py-2">Title</th>
             <th className="px-4 py-2">Difficulty</th>
@@ -62,8 +62,8 @@ function ProblemList() {
             .map((p) => {
               const isSolved = solvedIds.includes(p._id);
               return (
-                <tr key={p._id} className="border-t">
-                  <td className="px-4 py-2 text-blue-600">
+                <tr key={p._id} className="border-t dark:border-gray-700">
+                  <td className="px-4 py-2 text-blue-600 dark:text-purple-400 font-medium hover:underline">
                     <Link to={`/editor/${p._id}`}>{p.title}</Link>
                   </td>
                   <td className="px-4 py-2">{p.difficulty}</td>
@@ -72,7 +72,7 @@ function ProblemList() {
                   </td>
                   <td className="px-4 py-2">
                     {isSolved ? (
-                      <span className="text-green-600 font-semibold">✔ Solved</span>
+                      <span className="text-green-500 font-semibold">✔ Solved</span>
                     ) : (
                       <span className="text-red-500">✘</span>
                     )}

@@ -2,22 +2,21 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import axios from "axios";
+import DescriptionTab from "./DescriptionTab";
+import SubmissionsTab from "./SubmissionsTab";
 
 function EditorPage() {
   const { id } = useParams();
 
-  /* problem + editor states */
-  const [problem, setProblem]   = useState(null);
-  const [code, setCode]         = useState("// Loading...");
-  const [input, setInput]       = useState("");
-  const [output, setOutput]     = useState("");
+  const [problem, setProblem] = useState(null);
+  const [code, setCode] = useState("// Loading...");
+  const [input, setInput] = useState("");
+  const [output, setOutput] = useState("");
   const [language, setLanguage] = useState("cpp");
-  const [verdict, setVerdict]   = useState(null);
-
-  /* 🆕 submissions for this problem */
+  const [verdict, setVerdict] = useState(null);
   const [subs, setSubs] = useState([]);
+  const [activeTab, setActiveTab] = useState("description");
 
-  /* fetch problem & starter code */
   useEffect(() => {
     const fetchProblem = async () => {
       try {
@@ -35,25 +34,21 @@ function EditorPage() {
     fetchProblem();
   }, [id, language]);
 
-  /* 🆕 fetch submissions for this problem */
   const fetchSubmissions = async () => {
     try {
-      const res = await axios.get(
-        `http://localhost:5000/api/submissions/${id}`,
-        { withCredentials: true }
-      );
+      const res = await axios.get(`http://localhost:5000/api/submissions/${id}`, {
+        withCredentials: true,
+      });
       setSubs(res.data);
     } catch (err) {
       console.error("Fetch submissions error:", err);
     }
   };
 
-  /* call once on mount */
   useEffect(() => {
     fetchSubmissions();
   }, [id]);
 
-  /* Run Code (custom input) */
   const handleRun = async () => {
     setOutput("Running...");
     try {
@@ -68,7 +63,6 @@ function EditorPage() {
     }
   };
 
-  /* Submit Code (all test cases) */
   const handleSubmitCode = async () => {
     setVerdict(null);
     setOutput("");
@@ -79,43 +73,51 @@ function EditorPage() {
         { withCredentials: true }
       );
       setVerdict(res.data);
-      /* 🆕 refresh submissions list */
-      fetchSubmissions();
+      fetchSubmissions(); // Refresh
     } catch (err) {
       setVerdict({ verdict: "Server Error", passed: 0, total: 0 });
     }
   };
 
-  if (!problem) return <div className="p-6">⏳ Loading problem…</div>;
+  if (!problem) return <div className="p-6 dark:text-white">⏳ Loading problem…</div>;
 
-  /* ---------- JSX ---------- */
   return (
-    <div className="flex h-screen">
-      {/* Left: description */}
-      <div className="w-1/2 p-6 border-r overflow-y-auto bg-gray-50">
-        <h1 className="text-2xl font-bold mb-2">{problem.title}</h1>
-        <p className="mb-4 text-gray-700">{problem.description}</p>
-        <h3 className="font-semibold">Input</h3>
-        <p className="text-sm text-gray-600 mb-2">{problem.inputFormat}</p>
-        <h3 className="font-semibold">Output</h3>
-        <p className="text-sm text-gray-600 mb-2">{problem.outputFormat}</p>
+    <div className="flex h-screen dark:bg-zinc-900 text-black dark:text-white">
+      {/* Left: Tabs */}
+      <div className="w-1/2 p-6 border-r border-gray-300 dark:border-gray-700 overflow-y-auto bg-gray-50 dark:bg-zinc-800">
+        <div className="flex gap-4 border-b border-gray-300 dark:border-gray-600 mb-4">
+          <button
+            className={`pb-2 font-medium ${
+              activeTab === "description"
+                ? "border-b-2 border-blue-600"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+            onClick={() => setActiveTab("description")}
+          >
+            Description
+          </button>
+          <button
+            className={`pb-2 font-medium ${
+              activeTab === "submissions"
+                ? "border-b-2 border-blue-600"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+            onClick={() => setActiveTab("submissions")}
+          >
+            Submissions
+          </button>
+        </div>
 
-        <h3 className="font-semibold mt-4">Sample</h3>
-        <pre className="bg-white p-3 rounded text-sm border whitespace-pre-line">
-Input:
-{problem.sampleInput}
-
-Output:
-{problem.sampleOutput}
-        </pre>
+        {activeTab === "description" && <DescriptionTab problem={problem} />}
+        {activeTab === "submissions" && <SubmissionsTab subs={subs} />}
       </div>
 
-      {/* Right: editor */}
-      <div className="w-1/2 p-6 flex flex-col">
+      {/* Right: Editor */}
+      <div className="w-1/2 p-6 flex flex-col bg-white dark:bg-zinc-900">
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
-          className="mb-3 p-2 border rounded w-fit"
+          className="mb-3 p-2 border rounded w-fit dark:bg-zinc-800 dark:text-white dark:border-gray-700"
         >
           <option value="cpp">C++</option>
           <option value="c">C</option>
@@ -123,7 +125,7 @@ Output:
           <option value="java">Java</option>
         </select>
 
-        <div className="flex-1 border mb-3">
+        <div className="flex-1 border mb-3 dark:border-gray-700">
           <Editor
             height="100%"
             theme="vs-dark"
@@ -134,7 +136,7 @@ Output:
         </div>
 
         <textarea
-          className="border rounded p-2 text-sm mb-2"
+          className="border rounded p-2 text-sm mb-2 dark:bg-zinc-800 dark:text-white dark:border-gray-700"
           rows={3}
           placeholder="Custom input (optional)"
           value={input}
@@ -142,63 +144,32 @@ Output:
         />
 
         <div className="flex gap-3 mb-2">
-          <button onClick={handleRun} className="bg-blue-600 text-white px-4 py-2 rounded">
+          <button
+            onClick={handleRun}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+          >
             Run Code
           </button>
-          <button onClick={handleSubmitCode} className="bg-green-600 text-white px-4 py-2 rounded">
+          <button
+            onClick={handleSubmitCode}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+          >
             Submit Code
           </button>
         </div>
 
-        {/* Output */}
         <div className="bg-black text-green-400 p-3 rounded text-sm font-mono overflow-auto h-32">
           {output || "Output will appear here…"}
         </div>
 
-        {/* Verdict */}
         {verdict && (
           <div
             className={`mt-2 p-2 rounded text-sm font-semibold ${
-              verdict.verdict === "Accepted" ? "text-green-600" : "text-red-600"
+              verdict.verdict === "Accepted" ? "text-green-500" : "text-red-500"
             }`}
           >
             Verdict: {verdict.verdict} <br />
             Passed: {verdict.passed} / {verdict.total}
-          </div>
-        )}
-
-        {/* 🆕 My Submissions table */}
-        {subs.length > 0 && (
-          <div className="mt-6">
-            <h3 className="font-semibold mb-2">📜 My Submissions</h3>
-            <table className="w-full text-xs border">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="p-1">Time</th>
-                  <th className="p-1">Lang</th>
-                  <th className="p-1">Verdict</th>
-                  <th className="p-1">Passed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subs.map((s, idx) => (
-                  <tr key={idx} className="border-t">
-                    <td className="p-1">{new Date(s.createdAt).toLocaleString()}</td>
-                    <td className="p-1">{s.language}</td>
-                    <td
-                      className={`p-1 font-semibold ${
-                        s.verdict === "Accepted" ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      {s.verdict}
-                    </td>
-                    <td className="p-1">
-                      {s.passed} / {s.total}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         )}
       </div>
