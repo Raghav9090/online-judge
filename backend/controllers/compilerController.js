@@ -1,3 +1,4 @@
+/* controllers/compilerController.js */
 const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
@@ -5,56 +6,57 @@ const { v4: uuid } = require("uuid");
 
 const Problem = require("../models/Problem");
 const Submission = require("../models/Submission");
-const User = require("../models/User");          // 🆕 import User model
+const User = require("../models/User");
 
-/* ---------- utility helpers ---------- */
+/* ---------- helpers ---------- */
 const execPromise = (cmd) =>
   new Promise((resolve) => {
-    exec(cmd, (error, stdout, stderr) => resolve({ error, stdout, stderr }));
+    exec(cmd, { timeout: 5000 }, (error, stdout, stderr) =>
+      resolve({ error, stdout, stderr })
+    );
   });
 
 const cleanup = (jobId, dir, ext) => {
-  const files = [
-    `${jobId}.${ext}`,
-    `${jobId}.exe`,
-    `${jobId}.class`,
-  ];
-  files.forEach((f) => {
-    const fp = path.join(dir, f);
+  const extra = [".exe", ".class"];
+  [`.${ext}`, ...extra].forEach((suf) => {
+    const fp = path.join(dir, `${jobId}${suf}`);
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
   });
 };
-/* ------------------------------------- */
 
-/* ============ RUN CODE (custom input) ============ */
+const normalize = (str = "") =>
+  str.toString().replace(/\r?\n|\r/g, "").trim();
+/* -------------------------------- */
+
+/*============ RUN CODE (custom input) ============*/
 exports.runCode = async (req, res) => {
   const { code, language = "cpp", input = "" } = req.body;
   if (!code) return res.status(400).json({ message: "Code is required" });
 
   const jobId = uuid();
-  const tempDir = path.join(__dirname, "..", "temp");
-  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+  const dir = path.join(__dirname, "..", "temp");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
-  /* compiler / run commands */
-  let fileExt, compileCmd, runCmd;
+  /* build per‑language commands */
+  let ext, compileCmd, runCmd;
   switch (language) {
     case "cpp":
-      fileExt = "cpp";
+      ext = "cpp";
       compileCmd = `g++ ${jobId}.cpp -o ${jobId}.exe`;
-      runCmd = `${jobId}.exe < ${jobId}.in`;
+      runCmd = `./${jobId}.exe < ${jobId}.in`;
       break;
     case "c":
-      fileExt = "c";
+      ext = "c";
       compileCmd = `gcc ${jobId}.c -o ${jobId}.exe`;
-      runCmd = `${jobId}.exe < ${jobId}.in`;
+      runCmd = `./${jobId}.exe < ${jobId}.in`;
       break;
     case "python":
-      fileExt = "py";
-      compileCmd = "";
-      runCmd = `python ${jobId}.py < ${jobId}.in`;
+      ext = "py";
+      compileCmd = ""; // interpreted
+      runCmd = `python3 ${jobId}.py < ${jobId}.in`;
       break;
     case "java":
-      fileExt = "java";
+      ext = "java";
       compileCmd = `javac ${jobId}.java`;
       runCmd = `java ${jobId} < ${jobId}.in`;
       break;
@@ -63,61 +65,60 @@ exports.runCode = async (req, res) => {
   }
 
   /* write temp files */
-  fs.writeFileSync(path.join(tempDir, `${jobId}.${fileExt}`), code);
-  fs.writeFileSync(path.join(tempDir, `${jobId}.in`), input);
+  fs.writeFileSync(path.join(dir, `${jobId}.${ext}`), code);
+  fs.writeFileSync(path.join(dir, `${jobId}.in`), input);
 
   try {
-    /* compile (if needed) */
+    /* compile (if applicable) */
     if (compileCmd) {
-      const { error, stderr } = await execPromise(`cd ${tempDir} && ${compileCmd}`);
+      const { error, stderr } = await execPromise(`cd ${dir} && ${compileCmd}`);
       if (error) {
-        cleanup(jobId, tempDir, fileExt);
-        return res.json({ success: false, error: stderr });
+        cleanup(jobId, dir, ext);
+        return res.json({ success: false, error: stderr || "Compilation Error" });
       }
     }
 
     /* run */
-    const { stdout, stderr, error } = await execPromise(`cd ${tempDir} && ${runCmd}`);
-    cleanup(jobId, tempDir, fileExt);
+    const { stdout, stderr, error } = await execPromise(`cd ${dir} && ${runCmd}`);
+    cleanup(jobId, dir, ext);
 
     if (error) return res.json({ success: false, error: stderr || "Runtime Error" });
-
     res.json({ success: true, output: stdout.trim() });
   } catch (err) {
-    cleanup(jobId, tempDir, fileExt);
+    cleanup(jobId, dir, ext);
     res.status(500).json({ success: false, error: err.message });
   }
 };
 
-/* ===== SUBMIT CODE (all test cases + save submission) ===== */
+/*====== SUBMIT CODE (test‑cases + save) ======*/
 exports.submitCode = async (req, res) => {
   const { code, language = "cpp" } = req.body;
-  const { id } = req.params; // problem id
+  const { id: problemId } = req.params;
   if (!code) return res.status(400).json({ message: "Code is required" });
 
   const jobId = uuid();
-  const tempDir = path.join(__dirname, "..", "temp");
-  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+  const dir = path.join(__dirname, "..", "temp");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
-  let fileExt, compileCmd, runTemplate;
+  let ext, compileCmd, runTemplate;
   switch (language) {
     case "cpp":
-      fileExt = "cpp";
+      ext = "cpp";
       compileCmd = `g++ ${jobId}.cpp -o ${jobId}.exe`;
-      runTemplate = `${jobId}.exe < {input}`;
+      runTemplate = `./${jobId}.exe < {input}`;
       break;
     case "c":
-      fileExt = "c";
+      ext = "c";
       compileCmd = `gcc ${jobId}.c -o ${jobId}.exe`;
-      runTemplate = `${jobId}.exe < {input}`;
+      runTemplate = `./${jobId}.exe < {input}`;
       break;
     case "python":
-      fileExt = "py";
+      ext = "py";
       compileCmd = "";
-      runTemplate = `python ${jobId}.py < {input}`;
+      runTemplate = `python3 ${jobId}.py < {input}`;
       break;
     case "java":
-      fileExt = "java";
+      ext = "java";
       compileCmd = `javac ${jobId}.java`;
       runTemplate = `java ${jobId} < {input}`;
       break;
@@ -125,21 +126,20 @@ exports.submitCode = async (req, res) => {
       return res.status(400).json({ message: "Unsupported language" });
   }
 
-  /* write code file */
-  fs.writeFileSync(path.join(tempDir, `${jobId}.${fileExt}`), code);
+  fs.writeFileSync(path.join(dir, `${jobId}.${ext}`), code);
 
   try {
     /* compile */
     if (compileCmd) {
-      const { error, stderr } = await execPromise(`cd ${tempDir} && ${compileCmd}`);
+      const { error, stderr } = await execPromise(`cd ${dir} && ${compileCmd}`);
       if (error) {
-        cleanup(jobId, tempDir, fileExt);
+        cleanup(jobId, dir, ext);
         return res.json({ success: false, verdict: "Compilation Error", error: stderr });
       }
     }
 
-    /* fetch problem & run test cases */
-    const problem = await Problem.findById(id);
+    /* get problem + run tests */
+    const problem = await Problem.findById(problemId);
     if (!problem) return res.status(404).json({ message: "Problem not found" });
 
     let passed = 0;
@@ -147,25 +147,25 @@ exports.submitCode = async (req, res) => {
 
     for (let i = 0; i < total; i++) {
       const tc = problem.testcases[i];
-      const inFile = path.join(tempDir, `${jobId}_${i}.in`);
+      const inFile = path.join(dir, `${jobId}_${i}.in`);
       fs.writeFileSync(inFile, tc.input);
 
       const runCmd = runTemplate.replace("{input}", `${jobId}_${i}.in`);
-      const { stdout, error } = await execPromise(`cd ${tempDir} && ${runCmd}`);
+      const { stdout, error } = await execPromise(`cd ${dir} && ${runCmd}`);
 
-      if (!error && stdout.trim() === (tc.output || "").trim()) passed++;
+      if (!error && normalize(stdout) === normalize(tc.output)) passed++;
 
       fs.unlinkSync(inFile);
     }
 
-    cleanup(jobId, tempDir, fileExt);
+    cleanup(jobId, dir, ext);
 
     const verdict = passed === total ? "Accepted" : "Wrong Answer";
 
-    /* save submission */
+    /* store submission */
     await Submission.create({
-      user: req.currUser,        // set by isLoggedIn middleware
-      problem: id,
+      user: req.currUser,
+      problem: problemId,
       code,
       language,
       verdict,
@@ -173,19 +173,21 @@ exports.submitCode = async (req, res) => {
       total,
     });
 
-    /* update solvedProblems */
+    /* mark as solved */
     if (verdict === "Accepted") {
-      const user = await User.findById(req.currUser);
-      if (!user.solvedProblems.includes(id)) {
-        user.solvedProblems.push(id);
-        await user.save();
-      }
+      await User.findByIdAndUpdate(req.currUser, {
+        $addToSet: { solvedProblems: problemId },
+      });
     }
 
     res.json({ success: true, verdict, passed, total });
   } catch (err) {
     console.error("Submit Error:", err.message);
-    cleanup(jobId, tempDir, fileExt);
-    res.status(500).json({ success: false, verdict: "Server Error", error: err.message });
+    cleanup(jobId, dir, ext);
+    res.status(500).json({
+      success: false,
+      verdict: "Server Error",
+      error: err.message,
+    });
   }
 };
