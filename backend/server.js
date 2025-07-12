@@ -32,6 +32,9 @@ app.use("/api", require("./routes/problemRoutes"));
 app.use("/api", require("./routes/userRoutes"));
 app.use("/api", require("./routes/compilerRoutes"));
 app.use("/api", require("./routes/submissionRoutes"));
+const hintRoute = require("./routes/hint");
+app.use("/api/hint", hintRoute);
+
 
 // ✅ MongoDB connection
 mongoose.connect(process.env.MONGO_URI)

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useContext } from "react";
 import { ThemeContext } from "./context/ThemeContext";
+import { Toaster } from "react-hot-toast";
 
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
@@ -13,16 +14,18 @@ import ProblemList from "./pages/ProblemList";
 import Submissions from "./pages/Submissions";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
+import AddProblem from "./pages/AddProblem"; // ✅ Step 1: Import AddProblem
 
 function App() {
-  const { theme } = useContext(ThemeContext); // Get the current theme
+  const { theme } = useContext(ThemeContext);
 
   return (
     <div className={theme === "dark" ? "dark" : ""}>
-      {/* Apply light/dark mode background */}
       <div className="min-h-screen bg-white text-black dark:bg-zinc-900 dark:text-white transition-all">
         <BrowserRouter>
           <Navbar />
+          <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
@@ -43,6 +46,14 @@ function App() {
               element={
                 <AdminRoute>
                   <Admin />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/add-problem" // ✅ Step 2: Add Route
+              element={
+                <AdminRoute>
+                  <AddProblem />
                 </AdminRoute>
               }
             />

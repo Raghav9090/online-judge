@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+  backend:
+    command: npm run dev               # nodemon dev mode
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  frontend:
+    command: npm run dev               # Vite dev server
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules

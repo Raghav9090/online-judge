@@ -4,24 +4,37 @@ import axios from "axios";
 export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);      // null = not checked yet
-  const [loading, setLoading] = useState(true); // true while checking
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchUser = async () => {
     try {
       const res = await axios.get("http://localhost:5000/api/dashboard", {
         withCredentials: true,
       });
-      setUser(res.data); // { message: "Welcome User", user: { ... } }
+      const currentUser = res.data?.user; // ✅ Extract just the user
+      setUser(currentUser);
+
+      // Store in localStorage too (for Home.jsx and refresh persistence)
+      localStorage.setItem("userInfo", JSON.stringify(currentUser));
     } catch {
       setUser(null);
+      localStorage.removeItem("userInfo");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUser();
+    // 🧠 First try to load from localStorage if available
+    const storedUser = localStorage.getItem("userInfo");
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+      setLoading(false);
+    } else {
+      // 🔄 Else fetch from backend
+      fetchUser();
+    }
   }, []);
 
   return (

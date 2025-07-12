@@ -1,180 +1,260 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { useParams } from "react-router-dom";
-import Editor from "@monaco-editor/react";
 import axios from "axios";
+import Split from "react-split";
+import { ThemeContext } from "../context/ThemeContext";
 import DescriptionTab from "./DescriptionTab";
 import SubmissionsTab from "./SubmissionsTab";
+import CodeMirror from "@uiw/react-codemirror";
+import { cpp } from "@codemirror/lang-cpp";
+import { java } from "@codemirror/lang-java";
+import { python } from "@codemirror/lang-python";
+import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
+import { FaUndo } from "react-icons/fa";
+import Swal from "sweetalert2";
 
-function EditorPage() {
+export default function EditorPage() {
   const { id } = useParams();
-
+  const { darkMode } = useContext(ThemeContext);
   const [problem, setProblem] = useState(null);
-  const [code, setCode] = useState("// Loading...");
-  const [input, setInput] = useState("");
-  const [output, setOutput] = useState("");
+  const [code, setCode] = useState("// Start coding here...");
   const [language, setLanguage] = useState("cpp");
+  const [testCases, setTestCases] = useState([]);
+  const [activeTestIndex, setActiveTestIndex] = useState(0);
   const [verdict, setVerdict] = useState(null);
   const [subs, setSubs] = useState([]);
   const [activeTab, setActiveTab] = useState("description");
+  const [aiHint, setAiHint] = useState("");
+  const [hintActive, setHintActive] = useState(false);
+  const editorRef = useRef(null);
 
   useEffect(() => {
-    const fetchProblem = async () => {
+    (async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/problem/${id}`, {
-          withCredentials: true,
-        });
+        const res = await axios.get(`http://localhost:5000/api/problem/${id}`, { withCredentials: true });
         const p = res.data;
         setProblem(p);
-        setInput(p.sampleInput || "");
         setCode(p.starterCode?.[language] || "// Start coding here...");
+        const visibleCases = (p.testcases || []).filter(tc => tc.visible);
+        setTestCases(visibleCases.map(tc => ({ input: tc.input, expected: tc.output, output: "", passed: null })));
       } catch (err) {
-        console.error("Load problem error:", err);
+        console.error("Problem fetch error:", err);
       }
-    };
-    fetchProblem();
+    })();
   }, [id, language]);
 
-  const fetchSubmissions = async () => {
-    try {
-      const res = await axios.get(`http://localhost:5000/api/submissions/${id}`, {
-        withCredentials: true,
-      });
-      setSubs(res.data);
-    } catch (err) {
-      console.error("Fetch submissions error:", err);
-    }
-  };
-
   useEffect(() => {
-    fetchSubmissions();
+    (async () => {
+      try {
+        const r = await axios.get(`http://localhost:5000/api/submissions/${id}`, { withCredentials: true });
+        setSubs(r.data);
+      } catch (err) {
+        console.error("Submissions fetch error:", err);
+      }
+    })();
   }, [id]);
 
-  const handleRun = async () => {
-    setOutput("Running...");
+  const runSingleTest = async (test, index) => {
+    const updated = [...testCases];
+    updated[index].output = "Running...";
+    setTestCases(updated);
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/submitcode",
-        { code, input, language },
-        { withCredentials: true }
-      );
-      setOutput(res.data.output || res.data.error || "No output");
-    } catch (err) {
-      setOutput("Execution failed.");
+      const r = await axios.post("http://localhost:5000/api/submitcode", { code, input: test.input, language }, { withCredentials: true });
+      updated[index].output = r.data.output || r.data.error || "No output";
+      updated[index].passed = (r.data.output || "").trim() === test.expected.trim();
+    } catch {
+      updated[index].output = "Execution Error";
+      updated[index].passed = false;
     }
+    setTestCases([...updated]);
   };
 
-  const handleSubmitCode = async () => {
+  const handleSubmit = async () => {
     setVerdict(null);
-    setOutput("");
     try {
-      const res = await axios.post(
-        `http://localhost:5000/api/submitcode/${id}`,
-        { code, language },
-        { withCredentials: true }
-      );
-      setVerdict(res.data);
-      fetchSubmissions(); // Refresh
-    } catch (err) {
+      const r = await axios.post(`http://localhost:5000/api/submitcode/${id}`, { code, language }, { withCredentials: true });
+      setVerdict(r.data);
+    } catch {
       setVerdict({ verdict: "Server Error", passed: 0, total: 0 });
     }
   };
 
-  if (!problem) return <div className="p-6 dark:text-white">⏳ Loading problem…</div>;
+  const handleRunAll = async () => {
+    for (let i = 0; i < testCases.length; i++) await runSingleTest(testCases[i], i);
+  };
+
+  const handleReset = async () => {
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: "Your current code will be lost.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, reset it!",
+    });
+    if (result.isConfirmed) setCode(problem.starterCode?.[language] || "// Start coding here...");
+  };
+
+  const handleGetHint = async () => {
+    try {
+      const res = await axios.post("http://localhost:5000/api/hint", {
+        code,
+        language,
+        problemTitle: problem.title,
+      }, { withCredentials: true });
+
+      const hint = res.data.hint || "No suggestion available.";
+      setAiHint(hint);
+      setHintActive(true);
+      Swal.fire({
+        title: "AI Suggestion",
+        html: `<pre style="text-align: left; white-space: pre-wrap;">${hint}</pre>`,
+        icon: "info",
+        confirmButtonText: "Use this",
+        showCancelButton: true,
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setCode(code + "\n\n" + hint);
+          setHintActive(false);
+        }
+      });
+    } catch (err) {
+      console.error("Hint error:", err);
+      Swal.fire("Oops!", "Failed to get AI hint.", "error");
+    }
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Tab" && hintActive && aiHint) {
+      event.preventDefault();
+      setCode(prev => prev + "\n\n" + aiHint);
+      setHintActive(false);
+    }
+  };
+
+  const langExt = language === "cpp" ? cpp() : language === "java" ? java() : python();
+  if (!problem) return <div className="p-6">Loading…</div>;
 
   return (
-    <div className="flex h-screen dark:bg-zinc-900 text-black dark:text-white">
-      {/* Left: Tabs */}
-      <div className="w-1/2 p-6 border-r border-gray-300 dark:border-gray-700 overflow-y-auto bg-gray-50 dark:bg-zinc-800">
-        <div className="flex gap-4 border-b border-gray-300 dark:border-gray-600 mb-4">
-          <button
-            className={`pb-2 font-medium ${
-              activeTab === "description"
-                ? "border-b-2 border-blue-600"
-                : "text-gray-500 dark:text-gray-400"
-            }`}
-            onClick={() => setActiveTab("description")}
-          >
-            Description
-          </button>
-          <button
-            className={`pb-2 font-medium ${
-              activeTab === "submissions"
-                ? "border-b-2 border-blue-600"
-                : "text-gray-500 dark:text-gray-400"
-            }`}
-            onClick={() => setActiveTab("submissions")}
-          >
-            Submissions
-          </button>
-        </div>
-
-        {activeTab === "description" && <DescriptionTab problem={problem} />}
-        {activeTab === "submissions" && <SubmissionsTab subs={subs} />}
+    <div className={`h-screen w-screen flex flex-col ${darkMode ? "bg-[#0f0f0f] text-white" : "bg-white text-black"}`}>
+      {/* Tabs */}
+      <div className="flex border-b border-white/10">
+        <button className={`px-5 py-2 text-sm font-semibold ${activeTab === "description" ? "bg-gray-200 dark:bg-[#1e1e1e] text-purple-600 dark:text-purple-400" : "hover:bg-gray-100 dark:hover:bg-[#1e1e1e] text-gray-600 dark:text-gray-400"}`} onClick={() => setActiveTab("description")}>Description</button>
+        <button className={`px-5 py-2 text-sm font-semibold ${activeTab === "submissions" ? "bg-gray-200 dark:bg-[#1e1e1e] text-purple-600 dark:text-purple-400" : "hover:bg-gray-100 dark:hover:bg-[#1e1e1e] text-gray-600 dark:text-gray-400"}`} onClick={() => setActiveTab("submissions")}>Submissions</button>
       </div>
 
-      {/* Right: Editor */}
-      <div className="w-1/2 p-6 flex flex-col bg-white dark:bg-zinc-900">
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="mb-3 p-2 border rounded w-fit dark:bg-zinc-800 dark:text-white dark:border-gray-700"
-        >
-          <option value="cpp">C++</option>
-          <option value="c">C</option>
-          <option value="python">Python</option>
-          <option value="java">Java</option>
-        </select>
-
-        <div className="flex-1 border mb-3 dark:border-gray-700">
-          <Editor
-            height="100%"
-            theme="vs-dark"
-            language={language}
-            value={code}
-            onChange={(v) => setCode(v || "")}
-          />
+      <Split
+        className={`flex-1 flex ${darkMode ? "bg-[#0f0f0f]" : "bg-white"}`}
+        sizes={[50, 50]}
+        minSize={350}
+        gutterSize={6}
+      >
+        <div className="overflow-auto p-4 bg-white dark:bg-[#101013]">
+          {activeTab === "description" ? <DescriptionTab problem={problem} /> : <SubmissionsTab subs={subs} />}
         </div>
 
-        <textarea
-          className="border rounded p-2 text-sm mb-2 dark:bg-zinc-800 dark:text-white dark:border-gray-700"
-          rows={3}
-          placeholder="Custom input (optional)"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
+        <Split direction="vertical" sizes={[70, 30]} minSize={150} gutterSize={6} className={`bg-white dark:bg-[#0f0f0f]`}>
+          {/* Code Editor */}
+          <div className={`flex flex-col border-b ${darkMode ? "bg-[#0f0f0f]" : "bg-white"}`}>
+            <div className="flex items-center gap-4 px-4 py-2 border-b border-gray-300 dark:border-white/10">
+              <label className="text-sm font-medium">Language:</label>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-gray-100 dark:bg-[#1a1a1a] text-gray-900 dark:text-white px-3 py-1 rounded">
+                <option value="cpp">C++</option>
+                <option value="java">Java</option>
+                <option value="python">Python</option>
+              </select>
+              <button onClick={handleSubmit} className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded text-sm">Submit</button>
+              <button onClick={handleRunAll} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm">Run</button>
+              <button onClick={handleGetHint} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 rounded text-sm">Get Hint</button>
+              <div className="ml-auto flex gap-2">
+                <button onClick={handleReset} title="Reset code" className="text-gray-700 dark:text-white hover:text-red-500 text-base"><FaUndo /></button>
+              </div>
+              {verdict && (
+                <div className={`ml-3 text-sm font-semibold ${verdict.verdict === "Accepted" ? "text-green-500" : "text-red-500"}`}>
+                  {verdict.verdict} ({verdict.passed}/{verdict.total})
+                </div>
+              )}
+            </div>
 
-        <div className="flex gap-3 mb-2">
-          <button
-            onClick={handleRun}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          >
-            Run Code
-          </button>
-          <button
-            onClick={handleSubmitCode}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-          >
-            Submit Code
-          </button>
-        </div>
-
-        <div className="bg-black text-green-400 p-3 rounded text-sm font-mono overflow-auto h-32">
-          {output || "Output will appear here…"}
-        </div>
-
-        {verdict && (
-          <div
-            className={`mt-2 p-2 rounded text-sm font-semibold ${
-              verdict.verdict === "Accepted" ? "text-green-500" : "text-red-500"
-            }`}
-          >
-            Verdict: {verdict.verdict} <br />
-            Passed: {verdict.passed} / {verdict.total}
+            <div className="flex-1 overflow-hidden border-t border-gray-300 dark:border-white/10 p-1">
+              <div className="h-full rounded border border-gray-300 dark:border-white/10 overflow-hidden">
+                <CodeMirror
+                  ref={editorRef}
+                  value={code}
+                  height="100%"
+                  extensions={[langExt]}
+                  theme={darkMode ? githubDark : githubLight}
+                  onChange={(v) => setCode(v)}
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Test Case Panel */}
+          <div className={`h-full ${darkMode ? "bg-[#0f0f0f]" : "bg-gray-50"} text-gray-900 dark:text-white`}>
+            <div className="text-sm px-4 pt-3 font-semibold text-green-600 dark:text-green-400">Testcase</div>
+            <div className="flex overflow-x-auto border-b border-gray-300 dark:border-white/10">
+              {testCases.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveTestIndex(i)}
+                  className={`px-4 py-2 text-sm font-semibold border-r border-gray-300 dark:border-white/10 ${
+                    i === activeTestIndex
+                      ? "bg-white dark:bg-black text-purple-600 dark:text-purple-400"
+                      : "hover:bg-gray-100 dark:hover:bg-[#2a2a2a] text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  Case {i + 1}
+                </button>
+              ))}
+            </div>
+
+            {testCases[activeTestIndex] && (
+              <div className="p-4 space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400">Input</label>
+                  <textarea
+                    className="w-full p-2 bg-gray-100 dark:bg-[#1e1e1e] text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-white/10 rounded resize-none"
+                    rows={2}
+                    value={testCases[activeTestIndex].input}
+                    onChange={(e) => {
+                      const updated = [...testCases];
+                      updated[activeTestIndex].input = e.target.value;
+                      setTestCases(updated);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400">Expected Output</label>
+                  <textarea
+                    className="w-full p-2 bg-gray-100 dark:bg-[#1e1e1e] text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-white/10 rounded resize-none"
+                    rows={1}
+                    value={testCases[activeTestIndex].expected}
+                    onChange={(e) => {
+                      const updated = [...testCases];
+                      updated[activeTestIndex].expected = e.target.value;
+                      setTestCases(updated);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400">Your Output</label>
+                  <pre className="bg-gray-100 dark:bg-[#1e1e1e] text-sm text-green-500 p-2 rounded max-h-20 overflow-auto whitespace-pre-wrap border border-gray-300 dark:border-white/10">
+                    {testCases[activeTestIndex].output}
+                  </pre>
+                  {testCases[activeTestIndex].passed !== null && (
+                    <div className={`text-sm font-semibold ${testCases[activeTestIndex].passed ? "text-green-500" : "text-red-500"}`}>
+                      {testCases[activeTestIndex].passed ? "✔ Passed" : "✘ Failed"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </Split>
+      </Split>
     </div>
   );
 }
-
-export default EditorPage;

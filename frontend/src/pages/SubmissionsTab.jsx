@@ -1,32 +1,36 @@
+// SubmissionsTab.jsx
 function SubmissionsTab({ subs }) {
-  if (!subs.length)
+  if (!subs.length) {
     return (
-      <p className="text-gray-500 dark:text-gray-400 text-sm">
+      <div className="p-6 text-sm text-gray-500 dark:text-gray-400">
         No submissions yet.
-      </p>
+      </div>
     );
+  }
 
   return (
-    <div className="text-gray-800 dark:text-gray-100">
-      <h3 className="text-lg font-semibold mb-3">📜 My Submissions</h3>
+    <div className="p-6 text-gray-900 dark:text-gray-100 bg-white dark:bg-[#0f0f0f]">
+      <h3 className="text-xl font-semibold mb-4 text-purple-600 dark:text-purple-400">
+        📜 My Submissions
+      </h3>
 
-      <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700 shadow-sm">
-        <table className="min-w-full text-sm text-left">
-          <thead className="bg-gray-100 dark:bg-zinc-800 border-b text-gray-700 dark:text-gray-300">
+      <div className="overflow-x-auto rounded-lg border border-gray-300 dark:border-zinc-700 shadow">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300">
             <tr>
-              <th className="px-4 py-2 font-medium">Time</th>
-              <th className="px-4 py-2 font-medium">Language</th>
-              <th className="px-4 py-2 font-medium">Verdict</th>
-              <th className="px-4 py-2 font-medium">Passed</th>
+              <th className="px-4 py-3 text-left font-medium">Time</th>
+              <th className="px-4 py-3 text-left font-medium">Language</th>
+              <th className="px-4 py-3 text-left font-medium">Verdict</th>
+              <th className="px-4 py-3 text-left font-medium">Passed</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="bg-white dark:bg-zinc-900 divide-y divide-gray-200 dark:divide-zinc-700">
             {subs.map((s, idx) => (
               <tr
                 key={idx}
-                className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-zinc-800 transition duration-150"
+                className="hover:bg-gray-50 dark:hover:bg-zinc-800 transition duration-150"
               >
-                <td className="px-4 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-gray-300">
                   {new Date(s.createdAt).toLocaleString("en-IN", {
                     hour12: true,
                     hour: "2-digit",
@@ -36,17 +40,17 @@ function SubmissionsTab({ subs }) {
                     month: "short",
                   })}
                 </td>
-                <td className="px-4 py-2">{s.language.toUpperCase()}</td>
+                <td className="px-4 py-3 text-gray-800 dark:text-gray-300">
+                  {s.language.toUpperCase()}
+                </td>
                 <td
-                  className={`px-4 py-2 font-semibold ${
-                    s.verdict === "Accepted"
-                      ? "text-green-500"
-                      : "text-red-400"
+                  className={`px-4 py-3 font-semibold ${
+                    s.verdict === "Accepted" ? "text-green-500" : "text-red-400"
                   }`}
                 >
                   {s.verdict}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-3 text-gray-800 dark:text-gray-300">
                   {s.passed} / {s.total}
                 </td>
               </tr>
