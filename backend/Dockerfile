@@ -1,20 +1,19 @@
 # backend/Dockerfile
 
-# Use Node LTS version
-FROM node:18
+FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
-# Copy the rest of the backend code
 COPY . .
 
-# Expose backend port
-EXPOSE 5000
+ENV NODE_ENV=production
 
-# Start the backend server
+# Avoid root user (optional, better security)
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+EXPOSE 5000
 CMD ["node", "server.js"]

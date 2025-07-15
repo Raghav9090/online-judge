@@ -1,4 +1,5 @@
-version: "3"
+version: "3.9"  # Use a newer version for features like profiles
+
 services:
   backend:
     build: ./backend
@@ -8,13 +9,20 @@ services:
       - ./backend:/app
     environment:
       - NODE_ENV=development
+    restart: unless-stopped
+    networks:
+      - judge-network
 
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
-    # ⛔ REMOVE this volume so build artifacts aren't overwritten
-    # volumes:
-    #   - ./frontend:/app
     depends_on:
       - backend
+    restart: unless-stopped
+    networks:
+      - judge-network
+
+networks:
+  judge-network:
+    driver: bridge

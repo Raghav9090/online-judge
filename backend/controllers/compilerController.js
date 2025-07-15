@@ -1,4 +1,3 @@
-/* controllers/compilerController.js */
 const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
@@ -8,25 +7,31 @@ const Problem = require("../models/Problem");
 const Submission = require("../models/Submission");
 const User = require("../models/User");
 
-/* ---------- helpers ---------- */
 const execPromise = (cmd) =>
   new Promise((resolve) => {
-    exec(cmd, { timeout: 5000 }, (error, stdout, stderr) =>
-      resolve({ error, stdout, stderr })
-    );
+    exec(cmd, { timeout: 5000 }, (error, stdout, stderr) => {
+      resolve({ error, stdout, stderr });
+    });
   });
 
 const cleanup = (jobId, dir, ext) => {
-  const extra = [".exe", ".class"];
+  const extra = [".exe", ".class", ".in"];
   [`.${ext}`, ...extra].forEach((suf) => {
-    const fp = path.join(dir, `${jobId}${suf}`);
-    if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    const file = path.join(dir, `${jobId}${suf}`);
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  });
+
+  // Clean up test input files for submissions
+  const files = fs.readdirSync(dir);
+  files.forEach((file) => {
+    if (file.startsWith(`${jobId}_`) && file.endsWith(".in")) {
+      fs.unlinkSync(path.join(dir, file));
+    }
   });
 };
 
 const normalize = (str = "") =>
   str.toString().replace(/\r?\n|\r/g, "").trim();
-/* -------------------------------- */
 
 /*============ RUN CODE (custom input) ============*/
 exports.runCode = async (req, res) => {
@@ -37,7 +42,6 @@ exports.runCode = async (req, res) => {
   const dir = path.join(__dirname, "..", "temp");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
-  /* build per‑language commands */
   let ext, compileCmd, runCmd;
   switch (language) {
     case "cpp":
@@ -52,7 +56,7 @@ exports.runCode = async (req, res) => {
       break;
     case "python":
       ext = "py";
-      compileCmd = ""; // interpreted
+      compileCmd = "";
       runCmd = `python3 ${jobId}.py < ${jobId}.in`;
       break;
     case "java":
@@ -64,12 +68,10 @@ exports.runCode = async (req, res) => {
       return res.status(400).json({ message: "Unsupported language" });
   }
 
-  /* write temp files */
   fs.writeFileSync(path.join(dir, `${jobId}.${ext}`), code);
   fs.writeFileSync(path.join(dir, `${jobId}.in`), input);
 
   try {
-    /* compile (if applicable) */
     if (compileCmd) {
       const { error, stderr } = await execPromise(`cd ${dir} && ${compileCmd}`);
       if (error) {
@@ -78,11 +80,17 @@ exports.runCode = async (req, res) => {
       }
     }
 
-    /* run */
     const { stdout, stderr, error } = await execPromise(`cd ${dir} && ${runCmd}`);
     cleanup(jobId, dir, ext);
 
-    if (error) return res.json({ success: false, error: stderr || "Runtime Error" });
+    if (error) {
+      const isTimeout = error.signal === "SIGTERM";
+      return res.json({
+        success: false,
+        error: isTimeout ? "Time Limit Exceeded" : stderr || "Runtime Error",
+      });
+    }
+
     res.json({ success: true, output: stdout.trim() });
   } catch (err) {
     cleanup(jobId, dir, ext);
@@ -129,7 +137,6 @@ exports.submitCode = async (req, res) => {
   fs.writeFileSync(path.join(dir, `${jobId}.${ext}`), code);
 
   try {
-    /* compile */
     if (compileCmd) {
       const { error, stderr } = await execPromise(`cd ${dir} && ${compileCmd}`);
       if (error) {
@@ -138,7 +145,6 @@ exports.submitCode = async (req, res) => {
       }
     }
 
-    /* get problem + run tests */
     const problem = await Problem.findById(problemId);
     if (!problem) return res.status(404).json({ message: "Problem not found" });
 
@@ -151,7 +157,9 @@ exports.submitCode = async (req, res) => {
       fs.writeFileSync(inFile, tc.input);
 
       const runCmd = runTemplate.replace("{input}", `${jobId}_${i}.in`);
-      const { stdout, error } = await execPromise(`cd ${dir} && ${runCmd}`);
+      const { stdout, error, stderr } = await execPromise(`cd ${dir} && ${runCmd}`);
+
+      const isTimeout = error && error.signal === "SIGTERM";
 
       if (!error && normalize(stdout) === normalize(tc.output)) passed++;
 
@@ -159,10 +167,8 @@ exports.submitCode = async (req, res) => {
     }
 
     cleanup(jobId, dir, ext);
-
     const verdict = passed === total ? "Accepted" : "Wrong Answer";
 
-    /* store submission */
     await Submission.create({
       user: req.currUser,
       problem: problemId,
@@ -173,7 +179,6 @@ exports.submitCode = async (req, res) => {
       total,
     });
 
-    /* mark as solved */
     if (verdict === "Accepted") {
       await User.findByIdAndUpdate(req.currUser, {
         $addToSet: { solvedProblems: problemId },
