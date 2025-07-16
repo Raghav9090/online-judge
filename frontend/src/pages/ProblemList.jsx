@@ -31,10 +31,10 @@ export default function ProblemList() {
     (async () => {
       try {
         const [problemRes, userRes] = await Promise.all([
-          axios.get("http://localhost:5000/api/problemlist", {
+          axios.get("http://3.111.39.120:5000/api/problemlist", {
             withCredentials: true,
           }),
-          axios.get("http://localhost:5000/api/dashboard", {
+          axios.get("http://3.111.39.120:5000/api/dashboard", {
             withCredentials: true,
           }),
         ]);

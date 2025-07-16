@@ -13,7 +13,7 @@ function Dashboard() {
   const handleUpdate = async () => {
     try {
       const res = await axios.put(
-        "http://localhost:5000/api/update-profile",
+        "http://3.111.39.120:5000/api/update-profile",
         { username, email, password },
         { withCredentials: true }
       );

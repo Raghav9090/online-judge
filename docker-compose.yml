@@ -1,4 +1,4 @@
-version: "3.9"  # Use a newer version for features like profiles
+version: "3.9"
 
 services:
   backend:
@@ -9,7 +9,10 @@ services:
       - ./backend:/app
     environment:
       - NODE_ENV=development
+      - MONGO_URI=mongodb://mongo:27017/onlinejudge
     restart: unless-stopped
+    depends_on:
+      - mongo
     networks:
       - judge-network
 
@@ -23,6 +26,19 @@ services:
     networks:
       - judge-network
 
+  mongo:
+    image: mongo:6.0
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - judge-network
+
 networks:
   judge-network:
     driver: bridge
+
+volumes:
+  mongo-data:

@@ -8,7 +8,7 @@ function Submissions() {
 
   useEffect(() => {
     axios
-      .get("http://localhost:5000/api/mysubmissions", {
+      .get("http://3.111.39.120:5000/api/mysubmissions", {
         withCredentials: true,
       })
       .then((res) => setSubmissions(res.data))

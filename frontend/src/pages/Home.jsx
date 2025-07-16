@@ -30,7 +30,7 @@ function Home() {
   useEffect(() => {
     const fetchGlobalStats = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/problemlist", {
+        const res = await axios.get("http://3.111.39.120:5000/api/problemlist", {
           withCredentials: true,
         });
         setGlobalStats((prev) => ({
@@ -51,7 +51,7 @@ function Home() {
       if (!user) return;
       try {
         const res = await axios.get(
-          `http://localhost:5000/api/submissions/${user._id}`,
+          `http://3.111.39.120:5000/api/submissions/${user._id}`,
           { withCredentials: true }
         );
 

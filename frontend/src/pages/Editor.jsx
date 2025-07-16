@@ -32,7 +32,7 @@ export default function EditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/problem/${id}`, { withCredentials: true });
+        const res = await axios.get(`http://3.111.39.120:5000/api/problem/${id}`, { withCredentials: true });
         const p = res.data;
         setProblem(p);
         setCode(p.starterCode?.[language] || "// Start coding here...");
@@ -47,7 +47,7 @@ export default function EditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await axios.get(`http://localhost:5000/api/submissions/${id}`, { withCredentials: true });
+        const r = await axios.get(`http://3.111.39.120:5000/api/submissions/${id}`, { withCredentials: true });
         setSubs(r.data);
       } catch (err) {
         console.error("Submissions fetch error:", err);
@@ -60,7 +60,7 @@ export default function EditorPage() {
     updated[index].output = "Running...";
     setTestCases(updated);
     try {
-      const r = await axios.post("http://localhost:5000/api/submitcode", { code, input: test.input, language }, { withCredentials: true });
+      const r = await axios.post("http://3.111.39.120:5000/api/submitcode", { code, input: test.input, language }, { withCredentials: true });
       updated[index].output = DOMPurify.sanitize(r.data.output || r.data.error || "No output");
       updated[index].passed = (r.data.output || "").trim() === test.expected.trim();
     } catch {
@@ -73,7 +73,7 @@ export default function EditorPage() {
   const handleSubmit = async () => {
     setVerdict(null);
     try {
-      const r = await axios.post(`http://localhost:5000/api/submitcode/${id}`, { code, language }, { withCredentials: true });
+      const r = await axios.post(`http://3.111.39.120:5000/api/submitcode/${id}`, { code, language }, { withCredentials: true });
       setVerdict(r.data);
     } catch {
       setVerdict({ verdict: "Server Error", passed: 0, total: 0 });
@@ -99,7 +99,7 @@ export default function EditorPage() {
 
   const handleGetHint = async () => {
     try {
-      const res = await axios.post("http://localhost:5000/api/hint", {
+      const res = await axios.post("http://3.111.39.120:5000/api/hint", {
         code,
         language,
         problemTitle: problem.title,

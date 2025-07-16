@@ -53,7 +53,7 @@ function AddProblem() {
         ...form,
         tags: form.tags.split(",").map((t) => t.trim()),
       };
-      await axios.post("http://localhost:5000/api/createproblem", payload, {
+      await axios.post("http://3.111.39.120:5000/api/createproblem", payload, {
         withCredentials: true,
       });
       toast.success("✅ Problem added successfully!");

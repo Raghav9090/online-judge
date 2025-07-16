@@ -9,7 +9,7 @@ export function AuthProvider({ children }) {
 
   const fetchUser = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/dashboard", {
+      const res = await axios.get("http://3.111.39.120:5000/api/dashboard", {
         withCredentials: true,
       });
       const currentUser = res.data?.user; // ✅ Extract just the user

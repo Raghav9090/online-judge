@@ -34,7 +34,7 @@ function Signup() {
 
     const loading = toast.loading("Creating account...");
     try {
-      const res = await axios.post("http://localhost:5000/api/signup", formData, {
+      const res = await axios.post("http://3.111.39.120:5000/api/signup", formData, {
         withCredentials: true,
       });
 

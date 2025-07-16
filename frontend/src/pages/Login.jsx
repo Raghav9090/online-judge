@@ -20,11 +20,11 @@ function Login() {
     try {
       toast.loading("Logging in...", { id: "login" }); // ✅
 
-      await axios.post("http://localhost:5000/api/login", formData, {
+      await axios.post("http://3.111.39.120:5000/api/login", formData, {
         withCredentials: true,
       });
 
-      const res = await axios.get("http://localhost:5000/api/dashboard", {
+      const res = await axios.get("http://3.111.39.120:5000/api/dashboard", {
         withCredentials: true,
       });
 
