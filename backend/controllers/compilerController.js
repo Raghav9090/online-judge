@@ -43,22 +43,22 @@ exports.runCode = async (req, res) => {
     case "cpp":
       ext = "cpp";
       compileCmd = `g++ ${jobId}.cpp -o ${jobId}.exe`;
-      runCmd = `./${jobId}.exe < ${jobId}.in`;
+      runCmd = `timeout 5s ./${jobId}.exe < ${jobId}.in`;
       break;
     case "c":
       ext = "c";
       compileCmd = `gcc ${jobId}.c -o ${jobId}.exe`;
-      runCmd = `./${jobId}.exe < ${jobId}.in`;
+      runCmd = `timeout 5s ./${jobId}.exe < ${jobId}.in`;
       break;
     case "python":
       ext = "py";
       compileCmd = ""; // interpreted
-      runCmd = `python3 ${jobId}.py < ${jobId}.in`;
+      runCmd = `timeout 5s python3 ${jobId}.py < ${jobId}.in`;
       break;
     case "java":
       ext = "java";
       compileCmd = `javac ${jobId}.java`;
-      runCmd = `java ${jobId} < ${jobId}.in`;
+      runCmd = `timeout 5s java ${jobId} < ${jobId}.in`;
       break;
     default:
       return res.status(400).json({ message: "Unsupported language" });
@@ -82,7 +82,14 @@ exports.runCode = async (req, res) => {
     const { stdout, stderr, error } = await execPromise(`cd ${dir} && ${runCmd}`);
     cleanup(jobId, dir, ext);
 
-    if (error) return res.json({ success: false, error: stderr || "Runtime Error" });
+    if (error) {
+      const isTimeout = error.killed || /timeout/.test(stderr);
+      return res.json({
+        success: false,
+        error: isTimeout ? "Execution timed out. Possible infinite loop." : stderr || "Runtime Error"
+      });
+    }
+
     res.json({ success: true, output: stdout.trim() });
   } catch (err) {
     cleanup(jobId, dir, ext);
@@ -105,22 +112,22 @@ exports.submitCode = async (req, res) => {
     case "cpp":
       ext = "cpp";
       compileCmd = `g++ ${jobId}.cpp -o ${jobId}.exe`;
-      runTemplate = `./${jobId}.exe < {input}`;
+      runTemplate = `timeout 5s ./${jobId}.exe < {input}`;
       break;
     case "c":
       ext = "c";
       compileCmd = `gcc ${jobId}.c -o ${jobId}.exe`;
-      runTemplate = `./${jobId}.exe < {input}`;
+      runTemplate = `timeout 5s ./${jobId}.exe < {input}`;
       break;
     case "python":
       ext = "py";
       compileCmd = "";
-      runTemplate = `python3 ${jobId}.py < {input}`;
+      runTemplate = `timeout 5s python3 ${jobId}.py < {input}`;
       break;
     case "java":
       ext = "java";
       compileCmd = `javac ${jobId}.java`;
-      runTemplate = `java ${jobId} < {input}`;
+      runTemplate = `timeout 5s java ${jobId} < {input}`;
       break;
     default:
       return res.status(400).json({ message: "Unsupported language" });
@@ -151,7 +158,7 @@ exports.submitCode = async (req, res) => {
       fs.writeFileSync(inFile, tc.input);
 
       const runCmd = runTemplate.replace("{input}", `${jobId}_${i}.in`);
-      const { stdout, error } = await execPromise(`cd ${dir} && ${runCmd}`);
+      const { stdout, stderr, error } = await execPromise(`cd ${dir} && ${runCmd}`);
 
       if (!error && normalize(stdout) === normalize(tc.output)) passed++;
 
