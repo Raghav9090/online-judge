@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import DOMPurify from "dompurify";
 
 function AddProblem() {
   const [form, setForm] = useState({
@@ -30,7 +31,7 @@ function AddProblem() {
 
   const handleTestcaseChange = (index, field, value) => {
     const newTestcases = [...form.testcases];
-    newTestcases[index][field] = field === "visible" ? value : value;
+    newTestcases[index][field] = value;
     setForm({ ...form, testcases: newTestcases });
   };
 
@@ -46,16 +47,37 @@ function AddProblem() {
     setForm({ ...form, testcases: updated });
   };
 
+  const sanitize = (value) => DOMPurify.sanitize(value);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const payload = {
         ...form,
-        tags: form.tags.split(",").map((t) => t.trim()),
+        title: sanitize(form.title),
+        description: sanitize(form.description),
+        inputFormat: sanitize(form.inputFormat),
+        outputFormat: sanitize(form.outputFormat),
+        sampleInput: sanitize(form.sampleInput),
+        sampleOutput: sanitize(form.sampleOutput),
+        tags: form.tags.split(",").map((t) => sanitize(t.trim())),
+        starterCode: {
+          cpp: form.starterCode.cpp,
+          python: form.starterCode.python,
+          java: form.starterCode.java,
+          c: form.starterCode.c,
+        },
+        testcases: form.testcases.map((tc) => ({
+          input: tc.input,
+          output: tc.output,
+          visible: tc.visible,
+        })),
       };
+
       await axios.post("http://localhost:5000/api/createproblem", payload, {
         withCredentials: true,
       });
+
       toast.success("✅ Problem added successfully!");
       setForm({
         title: "",
@@ -77,7 +99,10 @@ function AddProblem() {
 
   return (
     <div className="min-h-screen px-6 py-10 bg-gray-100 dark:bg-zinc-900 text-black dark:text-white">
-      <form onSubmit={handleSubmit} className="max-w-4xl mx-auto bg-white dark:bg-zinc-800 p-6 rounded shadow">
+      <form
+        onSubmit={handleSubmit}
+        className="max-w-4xl mx-auto bg-white dark:bg-zinc-800 p-6 rounded shadow"
+      >
         <h2 className="text-2xl font-bold mb-6 text-center">📝 Add New Problem</h2>
 
         {/* Problem Fields */}
@@ -167,7 +192,7 @@ function AddProblem() {
                 rows="2"
                 value={tc.input}
                 onChange={(e) => handleTestcaseChange(index, "input", e.target.value)}
-                className="w-full p-3 font-mono rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#2a2a2a] text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
+                className="w-full p-3 font-mono rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#2a2a2a] text-black dark:text-white"
                 placeholder="e.g., 5\n2 3 -2 4 -1"
               />
               <label className="block mt-3 mb-1 font-semibold text-gray-700 dark:text-gray-300">
@@ -177,7 +202,7 @@ function AddProblem() {
                 rows="2"
                 value={tc.output}
                 onChange={(e) => handleTestcaseChange(index, "output", e.target.value)}
-                className="w-full p-3 font-mono rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#2a2a2a] text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
+                className="w-full p-3 font-mono rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-[#2a2a2a] text-black dark:text-white"
                 placeholder="e.g., 4"
               />
               <label className="flex items-center gap-2 mt-3 text-sm">
