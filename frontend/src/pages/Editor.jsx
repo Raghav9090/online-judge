@@ -2,7 +2,6 @@ import { useEffect, useState, useContext, useRef } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import Split from "react-split";
-import DOMPurify from "dompurify";
 import { ThemeContext } from "../context/ThemeContext";
 import DescriptionTab from "./DescriptionTab";
 import SubmissionsTab from "./SubmissionsTab";
@@ -13,6 +12,7 @@ import { python } from "@codemirror/lang-python";
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
 import { FaUndo, FaPlus, FaTrash } from "react-icons/fa";
 import Swal from "sweetalert2";
+import DOMPurify from "dompurify";
 
 export default function EditorPage() {
   const { id } = useParams();
@@ -32,12 +32,12 @@ export default function EditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get(`http://3.111.39.120:5000/api/problem/${id}`, { withCredentials: true });
+        const res = await axios.get(`http://localhost:5000/api/problem/${id}`, { withCredentials: true });
         const p = res.data;
         setProblem(p);
         setCode(p.starterCode?.[language] || "// Start coding here...");
         const visibleCases = (p.testcases || []).filter(tc => tc.visible);
-        setTestCases(visibleCases.map(tc => ({ input: tc.input, expected: tc.output, output: "", passed: null })));
+        setTestCases(visibleCases.map(tc => ({ input: sanitize(tc.input), expected: sanitize(tc.output), output: "", passed: null })));
       } catch (err) {
         console.error("Problem fetch error:", err);
       }
@@ -47,7 +47,7 @@ export default function EditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await axios.get(`http://3.111.39.120:5000/api/submissions/${id}`, { withCredentials: true });
+        const r = await axios.get(`http://localhost:5000/api/submissions/${id}`, { withCredentials: true });
         setSubs(r.data);
       } catch (err) {
         console.error("Submissions fetch error:", err);
@@ -55,16 +55,18 @@ export default function EditorPage() {
     })();
   }, [id]);
 
+  const sanitize = (val) => DOMPurify.sanitize(val);
+
   const runSingleTest = async (test, index) => {
     const updated = [...testCases];
     updated[index].output = "Running...";
     setTestCases(updated);
     try {
-      const r = await axios.post("http://3.111.39.120:5000/api/submitcode", { code, input: test.input, language }, { withCredentials: true });
-      updated[index].output = DOMPurify.sanitize(r.data.output || r.data.error || "No output");
+      const r = await axios.post("http://localhost:5000/api/submitcode", { code, input: test.input, language }, { withCredentials: true });
+      updated[index].output = sanitize(r.data.output || r.data.error || "No output");
       updated[index].passed = (r.data.output || "").trim() === test.expected.trim();
     } catch {
-      updated[index].output = DOMPurify.sanitize("Execution Error");
+      updated[index].output = "Execution Error";
       updated[index].passed = false;
     }
     setTestCases([...updated]);
@@ -73,7 +75,7 @@ export default function EditorPage() {
   const handleSubmit = async () => {
     setVerdict(null);
     try {
-      const r = await axios.post(`http://3.111.39.120:5000/api/submitcode/${id}`, { code, language }, { withCredentials: true });
+      const r = await axios.post(`http://localhost:5000/api/submitcode/${id}`, { code, language }, { withCredentials: true });
       setVerdict(r.data);
     } catch {
       setVerdict({ verdict: "Server Error", passed: 0, total: 0 });
@@ -99,13 +101,13 @@ export default function EditorPage() {
 
   const handleGetHint = async () => {
     try {
-      const res = await axios.post("http://3.111.39.120:5000/api/hint", {
+      const res = await axios.post("http://localhost:5000/api/hint", {
         code,
         language,
         problemTitle: problem.title,
       }, { withCredentials: true });
 
-      const hint = DOMPurify.sanitize(res.data.hint || "No suggestion available.");
+      const hint = sanitize(res.data.hint || "No suggestion available.");
       setAiHint(hint);
       setHintActive(true);
       Swal.fire({
@@ -134,14 +136,13 @@ export default function EditorPage() {
     }
   };
 
-  const handleAddTestCase = () => {
+  const addTestCase = () => {
     setTestCases([...testCases, { input: "", expected: "", output: "", passed: null }]);
     setActiveTestIndex(testCases.length);
   };
 
-  const handleDeleteTestCase = (index) => {
-    const updated = [...testCases];
-    updated.splice(index, 1);
+  const deleteTestCase = (index) => {
+    const updated = testCases.filter((_, i) => i !== index);
     setTestCases(updated);
     setActiveTestIndex(Math.max(0, index - 1));
   };
@@ -156,13 +157,13 @@ export default function EditorPage() {
         <button className={`px-5 py-2 text-sm font-semibold ${activeTab === "submissions" ? "bg-gray-200 dark:bg-[#1e1e1e] text-purple-600 dark:text-purple-400" : "hover:bg-gray-100 dark:hover:bg-[#1e1e1e] text-gray-600 dark:text-gray-400"}`} onClick={() => setActiveTab("submissions")}>Submissions</button>
       </div>
 
-      <Split className={`flex-1 flex ${darkMode ? "bg-[#0f0f0f]" : "bg-white"}`} sizes={[50, 50]} minSize={350} gutterSize={6}>
+      <Split className="flex-1 flex" sizes={[50, 50]} minSize={350} gutterSize={6}>
         <div className="overflow-auto p-4 bg-white dark:bg-[#101013]">
           {activeTab === "description" ? <DescriptionTab problem={problem} /> : <SubmissionsTab subs={subs} />}
         </div>
 
-        <Split direction="vertical" sizes={[70, 30]} minSize={150} gutterSize={6} className={`bg-white dark:bg-[#0f0f0f]`}>
-          <div className={`flex flex-col border-b ${darkMode ? "bg-[#0f0f0f]" : "bg-white"}`}>
+        <Split direction="vertical" sizes={[70, 30]} minSize={150} gutterSize={6} className="bg-white dark:bg-[#0f0f0f]">
+          <div className="flex flex-col border-b">
             <div className="flex items-center gap-4 px-4 py-2 border-b border-gray-300 dark:border-white/10">
               <label className="text-sm font-medium">Language:</label>
               <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-gray-100 dark:bg-[#1a1a1a] text-gray-900 dark:text-white px-3 py-1 rounded">
@@ -182,30 +183,24 @@ export default function EditorPage() {
                 </div>
               )}
             </div>
-
             <div className="flex-1 overflow-hidden border-t border-gray-300 dark:border-white/10 p-1">
-              <div className="h-full rounded border border-gray-300 dark:border-white/10 overflow-hidden">
-                <CodeMirror
-                  ref={editorRef}
-                  value={code}
-                  height="100%"
-                  extensions={[langExt]}
-                  theme={darkMode ? githubDark : githubLight}
-                  onChange={(v) => setCode(v)}
-                  onKeyDown={handleKeyDown}
-                />
-              </div>
+              <CodeMirror
+                ref={editorRef}
+                value={code}
+                height="100%"
+                extensions={[langExt]}
+                theme={darkMode ? githubDark : githubLight}
+                onChange={(v) => setCode(v)}
+                onKeyDown={handleKeyDown}
+              />
             </div>
           </div>
 
           <div className={`h-full ${darkMode ? "bg-[#0f0f0f]" : "bg-gray-50"} text-gray-900 dark:text-white`}>
-            <div className="flex items-center justify-between px-4 pt-3">
-              <div className="text-sm font-semibold text-green-600 dark:text-green-400">Testcase</div>
-              <button onClick={handleAddTestCase} title="Add Test Case" className="text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1">
-                <FaPlus /> Add
-              </button>
+            <div className="text-sm px-4 pt-3 font-semibold text-green-600 dark:text-green-400 flex justify-between items-center">
+              <span>Testcase</span>
+              <button onClick={addTestCase} className="text-xs flex items-center gap-1 bg-green-700 hover:bg-green-800 text-white px-2 py-1 rounded"><FaPlus /> Add</button>
             </div>
-
             <div className="flex overflow-x-auto border-b border-gray-300 dark:border-white/10">
               {testCases.map((_, i) => (
                 <button
@@ -222,7 +217,7 @@ export default function EditorPage() {
               <div className="p-4 space-y-3">
                 <div className="flex justify-between">
                   <label className="block text-xs text-gray-500 dark:text-gray-400">Input</label>
-                  <button onClick={() => handleDeleteTestCase(activeTestIndex)} className="text-red-500 text-xs flex items-center gap-1"><FaTrash /> Delete</button>
+                  <button onClick={() => deleteTestCase(activeTestIndex)} className="text-xs flex items-center gap-1 text-red-600 hover:text-red-700"><FaTrash /> Delete</button>
                 </div>
                 <textarea
                   className="w-full p-2 bg-gray-100 dark:bg-[#1e1e1e] text-sm text-gray-900 dark:text-white border border-gray-300 dark:border-white/10 rounded resize-none"
@@ -230,7 +225,7 @@ export default function EditorPage() {
                   value={testCases[activeTestIndex].input}
                   onChange={(e) => {
                     const updated = [...testCases];
-                    updated[activeTestIndex].input = e.target.value;
+                    updated[activeTestIndex].input = sanitize(e.target.value);
                     setTestCases(updated);
                   }}
                 />
@@ -242,7 +237,7 @@ export default function EditorPage() {
                     value={testCases[activeTestIndex].expected}
                     onChange={(e) => {
                       const updated = [...testCases];
-                      updated[activeTestIndex].expected = e.target.value;
+                      updated[activeTestIndex].expected = sanitize(e.target.value);
                       setTestCases(updated);
                     }}
                   />
@@ -250,7 +245,7 @@ export default function EditorPage() {
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400">Your Output</label>
                   <pre className="bg-gray-100 dark:bg-[#1e1e1e] text-sm text-green-500 p-2 rounded max-h-20 overflow-auto whitespace-pre-wrap border border-gray-300 dark:border-white/10">
-                    {DOMPurify.sanitize(testCases[activeTestIndex].output)}
+                    {testCases[activeTestIndex].output}
                   </pre>
                   {testCases[activeTestIndex].passed !== null && (
                     <div className={`text-sm font-semibold ${testCases[activeTestIndex].passed ? "text-green-500" : "text-red-500"}`}>

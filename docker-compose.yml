@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 version: "3.9"
 
 services:
@@ -42,3 +43,24 @@ networks:
 
 volumes:
   mongo-data:
+=======
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - NODE_ENV=development
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    # ⛔ REMOVE this volume so build artifacts aren't overwritten
+    # volumes:
+    #   - ./frontend:/app
+    depends_on:
+      - backend
+>>>>>>> pre-deploy-stable
